@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <title>Ticket Viewer</title>
+
+        <!-- ─────────────────────────────────────────────
+       Google Fonts
+       Using "DM Sans" for the form page (clean/neutral)
+       and "SF Pro"-style system fonts for the ticket
+       page so it feels native to iOS.
+  ───────────────────────────────────────────────── -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+
+        <style>
+            /* ═══════════════════════════════════════════════
+            RESET & BASE
+            ═══════════════════════════════════════════════ */
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            html,
+            body {
+                height: 100%;
+                overflow: hidden; /* each "page" controls its own scroll */
+            }
+
+            body {
+                font-family: "DM Sans", sans-serif;
+                background: #f5f5f5;
+            }
+
+            /* ═══════════════════════════════════════════════
+       PAGE VISIBILITY UTILITY
+    ═══════════════════════════════════════════════ */
+            .page {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                flex-direction: column;
+                transition:
+                    opacity 0.25s ease,
+                    transform 0.25s ease;
+            }
+
+            /* Hidden pages are invisible and shifted slightly */
+            .page.hidden {
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(12px);
+            }
+
+            /* ═══════════════════════════════════════════════
+       PAGE 1 — FORM
+    ═══════════════════════════════════════════════ */
+            #form-page {
+                background: #f5f5f5;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .form-container {
+                max-width: 480px;
+                margin: 0 auto;
+                padding: 48px 24px 40px;
+            }
+
+            /* Page title */
+            .form-title {
+                font-size: 22px;
+                font-weight: 600;
+                color: #111;
+                margin-bottom: 6px;
+            }
+
+            .form-subtitle {
+                font-size: 13px;
+                color: #888;
+                margin-bottom: 36px;
+            }
+
+            /* ── Section headers inside the form ── */
+            .form-section-label {
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: #aaa;
+                margin-bottom: 10px;
+                margin-top: 28px;
+            }
+
+            .form-section-label:first-of-type {
+                margin-top: 0;
+            }
+
+            /* ── Individual field wrapper ── */
+            .field {
+                margin-bottom: 14px;
+            }
+
+            .field label {
+                display: block;
+                font-size: 12px;
+                font-weight: 500;
+                color: #666;
+                margin-bottom: 5px;
+            }
+
+            .field input {
+                width: 100%;
+                padding: 11px 14px;
+                background: #fff;
+                border: 1.5px solid #e0e0e0;
+                border-radius: 10px;
+                font-size: 15px;
+                font-family: "DM Sans", sans-serif;
+                color: #111;
+                outline: none;
+                transition: border-color 0.15s;
+                -webkit-appearance: none;
+            }
+
+            .field input:focus {
+                border-color: #555;
+            }
+
+            /* Two-column layout for numeric seat fields */
+            .field-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            /* ── Submit button ── */
+            .submit-btn {
+                width: 100%;
+                margin-top: 32px;
+                padding: 15px;
+                background: #111;
+                color: #fff;
+                border: none;
+                border-radius: 12px;
+                font-size: 15px;
+                font-weight: 600;
+                font-family: "DM Sans", sans-serif;
+                cursor: pointer;
+                transition: background 0.15s;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            .submit-btn:active {
+                background: #333;
+            }
+
+            /* ═══════════════════════════════════════════════
+       PAGE 2 — TICKET VIEWER
+    ═══════════════════════════════════════════════ */
+            #ticket-page {
+                background: #000;
+                overflow: hidden;
+            }
+
+            /* ── Horizontal scroll track ──
+       Each .ticket-slide snaps to full viewport width. */
+            .ticket-slider {
+                display: flex;
+                width: 100%;
+                height: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                scroll-snap-type: x mandatory;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none; /* Firefox */
+            }
+
+            .ticket-slider::-webkit-scrollbar {
+                display: none; /* Chrome / Safari */
+            }
+
+            /* ── Single ticket slide ── */
+            .ticket-slide {
+                flex: 0 0 100%; /* exactly one viewport wide */
+                width: 100%;
+                height: 100%;
+                scroll-snap-align: start;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+
+                padding: 5px;
+            }
+
+            /* ── Top header: event name + close button ── */
+            .ticket-header {
+                position: absolute;
+                width: 100%;
+
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                padding: 20px; /* extra top padding for safe area / notch */
+            }
+
+            .ticket-event-name {
+                font-family: -apple-system, "Helvetica Neue", sans-serif;
+                font-size: 20px;
+                font-weight: 700;
+                color: #fff;
+                line-height: 1.2;
+            }
+
+            .ticket-event-datetime {
+                font-family: -apple-system, "Helvetica Neue", sans-serif;
+                font-size: 14px;
+                color: #888;
+                margin-top: 3px;
+            }
+
+            /* Circular close (×) button — top right */
+            .close-btn {
+                flex-shrink: 0;
+                width: 34px;
+                height: 34px;
+                background: #2a2a2a;
+                border: none;
+                border-radius: 50%;
+                color: #fff;
+                font-size: 18px;
+                line-height: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                margin-left: 12px;
+                margin-top: 2px;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            .close-btn:active {
+                background: #444;
+            }
+
+            /* ── QR code card — centered in remaining space ── */
+            .qr-wrapper {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px 24px;
+            }
+
+            .qr-card {
+                background-color: rgb(29, 29, 29);
+                border-radius: 30px;
+                padding: 10px 10px 8px 10px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 14px;
+                /* Card fills most of the horizontal space */
+                width: min(50%, 88vw);
+            }
+
+            .qr-card img {
+                width: 100%; /* fill the full card width */
+                aspect-ratio: 1;
+                object-fit: contain;
+                display: block;
+                border-radius: 30px;
+                background-color: white;
+                padding: 5px;
+            }
+
+            /* "✓ Saved to device" label — sits below the QR image */
+            .qr-saved-label {
+                color: white;
+                font-family: -apple-system, "Helvetica Neue", sans-serif;
+                font-size: 0.75em;
+                font-weight: 500;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .qr-saved-label::before {
+                /* Filled circle with a checkmark */
+                content: "";
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                background: #555
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E")
+                    center/14px no-repeat;
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+
+            /* ── Seat info card — white card at bottom ── */
+            .seat-card {
+                background: #fff;
+                border-radius: 0 0 8px 8px;
+                padding: 22px 24px 0 24px;
+                /* Enough height to show the fields + send button */
+            }
+
+            .seat-fields {
+                display: flex;
+                gap: 0;
+                border-bottom: 1px solid #e8e8e8;
+                padding-bottom: 18px;
+            }
+
+            .seat-field {
+                flex: 1;
+            }
+
+            /* Divider lines between fields */
+            .seat-field + .seat-field {
+                border-left: 1px solid #e8e8e8;
+                padding-left: 16px;
+                margin-left: 0;
+            }
+
+            .seat-field-label {
+                font-family: -apple-system, "Helvetica Neue", sans-serif;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.07em;
+                text-transform: uppercase;
+                color: #999;
+                margin-bottom: 5px;
+            }
+
+            .seat-field-value {
+                font-family: -apple-system, "Helvetica Neue", sans-serif;
+                font-size: 20px;
+                font-weight: 700;
+                color: #111;
+                line-height: 1;
+            }
+
+            /* ── Send button ── */
+            .send-btn {
+                display: block;
+                width: 100%;
+                margin: 16px 0;
+                padding: 17px;
+                background: #2c2c2e;
+                color: #fff;
+                border: none;
+                border-radius: 14px;
+                font-family: -apple-system, "Helvetica Neue", sans-serif;
+                font-size: 17px;
+                font-weight: 600;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+                transition: background 0.15s;
+            }
+
+            .send-btn:active {
+                background: #444;
+            }
+
+            /* Safe-area bottom padding so send button clears the home indicator */
+            .seat-card {
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ═══════════════════════════════════════════════
+       PAGE 1 — FORM
+  ═══════════════════════════════════════════════ -->
+        <div id="form-page" class="page">
+            <div class="form-container">
+                <h1 class="form-title">Add Ticket</h1>
+                <p class="form-subtitle">
+                    Enter the details from your ticket below.
+                </p>
+
+                <!-- ── Event details ── -->
+                <p class="form-section-label">Event</p>
+
+                <div class="field">
+                    <label for="input-event">Event Name</label>
+                    <input
+                        type="text"
+                        id="input-event"
+                        placeholder="e.g. Athletics at Blue Jays"
+                        autocomplete="off"
+                    />
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="input-date">Date</label>
+                        <input
+                            type="text"
+                            id="input-date"
+                            placeholder="e.g. Sat, Mar 28"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="input-time">Time</label>
+                        <input
+                            type="text"
+                            id="input-time"
+                            placeholder="e.g. 15:07"
+                            autocomplete="off"
+                        />
+                    </div>
+                </div>
+
+                <!-- ── Seat details ── -->
+                <p class="form-section-label">Seat</p>
+
+                <div class="field">
+                    <label for="input-section">Section</label>
+                    <input
+                        type="text"
+                        id="input-section"
+                        placeholder="e.g. 513"
+                        autocomplete="off"
+                    />
+                </div>
+
+                <div class="field">
+                    <label for="input-row">Row</label>
+                    <input
+                        type="text"
+                        id="input-row"
+                        placeholder="e.g. 22"
+                        autocomplete="off"
+                    />
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="input-num-seats">Number of Seats</label>
+                        <input
+                            type="number"
+                            id="input-num-seats"
+                            placeholder="e.g. 2"
+                            min="1"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="input-start-seat">Starting Seat #</label>
+                        <input
+                            type="number"
+                            id="input-start-seat"
+                            placeholder="e.g. 9"
+                            min="1"
+                            autocomplete="off"
+                        />
+                    </div>
+                </div>
+
+                <button class="submit-btn" id="submit-btn">
+                    View Tickets →
+                </button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════
+       PAGE 2 — TICKET VIEWER
+       Ticket slides are injected here by JavaScript.
+  ═══════════════════════════════════════════════ -->
+        <div id="ticket-page" class="page hidden">
+            <div class="ticket-slider" id="ticket-slider">
+                <!-- .ticket-slide elements generated dynamically -->
+
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════
+       JAVASCRIPT
+  ═══════════════════════════════════════════════ -->
+
+        <script>
+            /* ─── Element references ─── */
+            const formPage = document.getElementById("form-page");
+            const ticketPage = document.getElementById("ticket-page");
+            const slider = document.getElementById("ticket-slider");
+            const submitBtn = document.getElementById("submit-btn");
+
+            /* ─── Form input references ─── */
+            const inputEvent = document.getElementById("input-event");
+            const inputDate = document.getElementById("input-date");
+            const inputTime = document.getElementById("input-time");
+            const inputSection = document.getElementById("input-section");
+            const inputRow = document.getElementById("input-row");
+            const inputNumSeats = document.getElementById("input-num-seats");
+            const inputStartSeat = document.getElementById("input-start-seat");
+
+            /**
+             * Build the HTML string for a single ticket slide.
+             *
+             * @param {Object} opts
+             * @param {string} opts.eventName  - e.g. "Athletics at Blue Jays"
+             * @param {string} opts.date       - e.g. "Sat, Mar 28"
+             * @param {string} opts.time       - e.g. "15:07"
+             * @param {string} opts.section    - e.g. "513"
+             * @param {string} opts.row        - e.g. "22"
+             * @param {number} opts.seatNumber - seat number for THIS ticket
+             * @returns {string} HTML markup
+             */
+            function buildTicketSlide({
+                eventName,
+                date,
+                time,
+                section,
+                row,
+                seatNumber,
+            }) {
+                return `
+        <div class="ticket-slide">
+
+          <!-- QR code card -->
+          <div class="qr-wrapper">
+            <div class="qr-card">
+              <img src="public/qr_code.png" alt="QR Code" />
+              <span class="qr-saved-label">Saved to device</span>
+            </div>
+
+          </div>
+
+          <!-- White seat-info card + Send button -->
+          <div class="seat-card">
+            <div class="seat-fields">
+
+              <div class="seat-field">
+                <div class="seat-field-label">Section</div>
+                <div class="seat-field-value">${escapeHtml(section)}</div>
+              </div>
+
+              <div class="seat-field">
+                <div class="seat-field-label">Row</div>
+                <div class="seat-field-value">${escapeHtml(row)}</div>
+              </div>
+
+              <div class="seat-field">
+                <div class="seat-field-label">Seat</div>
+                <div class="seat-field-value">${seatNumber}</div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <button class="send-btn">Send</button>
+
+        </div>
+      `;
+            }
+
+            /**
+             * Render all ticket slides into the slider for the given form data,
+             * then switch to the ticket page.
+             */
+            function showTickets() {
+                /* ── Read & validate form values ── */
+                const eventName = inputEvent.value.trim();
+                const date = inputDate.value.trim();
+                const time = inputTime.value.trim();
+                const section = inputSection.value.trim();
+                const row = inputRow.value.trim();
+                const numSeats = parseInt(inputNumSeats.value, 10);
+                const startSeat = parseInt(inputStartSeat.value, 10);
+
+                if (
+                    !eventName ||
+                    !date ||
+                    !time ||
+                    !section ||
+                    !row ||
+                    isNaN(numSeats) ||
+                    isNaN(startSeat) ||
+                    numSeats < 1
+                ) {
+                    alert("Please fill in all fields before continuing.");
+                    return;
+                }
+
+                /* ── Build slides ── */
+                let slidesHtml = `
+                    <!-- Header: event info + close button -->
+                    <div class="ticket-header">
+                        <div>
+                        <div class="ticket-event-name">${escapeHtml(eventName)}</div>
+                        <div class="ticket-event-datetime">
+                            ${escapeHtml(date)} · ${escapeHtml(time)}
+                        </div>
+                        </div>
+                        <button class="close-btn" aria-label="Close" onclick="closeTickets()">×</button>
+                    </div>
+                `;
+                for (let i = 0; i < numSeats; i++) {
+                    slidesHtml += buildTicketSlide({
+                        eventName,
+                        date,
+                        time,
+                        section,
+                        row,
+                        seatNumber: startSeat + i,
+                    });
+                }
+
+                slider.innerHTML = slidesHtml;
+
+                /* ── Reset scroll position to first slide ── */
+                slider.scrollLeft = 0;
+
+                /* ── Transition to ticket page ── */
+                formPage.classList.add("hidden");
+                ticketPage.classList.remove("hidden");
+            }
+
+            /**
+             * Go back to the form page.
+             * The form inputs retain their values — user can edit them.
+             */
+            function closeTickets() {
+                ticketPage.classList.add("hidden");
+                formPage.classList.remove("hidden");
+            }
+
+            /**
+             * Minimal HTML-escaping to prevent XSS from user-entered text.
+             *
+             * @param {string} str - raw user input
+             * @returns {string} escaped string safe for innerHTML
+             */
+            function escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;");
+            }
+
+            /* ─── Event listeners ─── */
+
+            // Submit button click
+            submitBtn.addEventListener("click", showTickets);
+
+            // Allow pressing Enter on any form field to submit
+            [
+                inputEvent,
+                inputDate,
+                inputTime,
+                inputSection,
+                inputRow,
+                inputNumSeats,
+                inputStartSeat,
+            ].forEach((input) => {
+                input.addEventListener("keydown", (e) => {
+                    if (e.key === "Enter") showTickets();
+                });
+            });
+        </script>
+    </body>
+</html>
